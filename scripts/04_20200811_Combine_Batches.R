@@ -32,6 +32,40 @@ pData(parameters(gh_pop_get_data(gs1[[1]])))[,c(1, 2)]
 # Combine Batches into a GatingSetList
 gs <- GatingSetList(list(gs1, gs2, gs3))
 
+# Clean up the Cohort column by changing any remaining "NA" or "Healthy control" to "Healthy"
+pData(gs)$Cohort <- ifelse(pData(gs)$Cohort %in% c(NA, "Healthy control"), "Healthy", pData(gs)$Cohort)
+
+# Lower the lower boundary of the /Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT gate for just patient 109C
+ggcyto(subset(gs, `SAMPLE ID` == "109C"), aes(CD3, aGC), subset = "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+",
+       filter=marginalFilter) + geom_hex(bins=128) +
+  # axis_x_inverse_trans() + axis_y_inverse_trans() +
+  ggcyto_par_set(limits = "instrument") +
+  facet_wrap(. ~ `SAMPLE ID`) +
+  theme_bw(base_size = 28) +
+  geom_gate("/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT") +
+  theme(
+         legend.position = "none",
+         strip.text.x = element_text(margin = margin(0,0,0,0, "cm")),
+         panel.grid.major = ggplot2::element_blank()) +
+  geom_stats(size=8, alpha=0.4) +
+  geom_hline(aes(yintercept = 1650))
+inkt_gate_109C <- gh_pop_get_gate(subset(gs, `SAMPLE ID` == "109C")[[1]], "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT")
+attributes(inkt_gate_109C)$boundaries[c(1,4), "<G575-A>"] <- 1650
+gh_pop_set_gate(subset(gs, `SAMPLE ID` == "109C")[[1]], "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT", inkt_gate_109C)
+recompute(subset(gs, `SAMPLE ID` == "109C"), "/Time/S/Live")
+ggcyto(subset(gs, `SAMPLE ID` == "109C"), aes(CD3, aGC), subset = "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+",
+       filter=marginalFilter) + geom_hex(bins=128) +
+  # axis_x_inverse_trans() + axis_y_inverse_trans() +
+  ggcyto_par_set(limits = "instrument") +
+  facet_wrap(. ~ `SAMPLE ID`) +
+  theme_bw(base_size = 28) +
+  geom_gate("/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT") +
+  theme(
+    legend.position = "none",
+    strip.text.x = element_text(margin = margin(0,0,0,0, "cm")),
+    panel.grid.major = ggplot2::element_blank()) +
+  geom_stats(size=8, alpha=0.4)
+
 ###########################################################
 
 # Extract cell count data to take a look at batch effect. Make boxplots.
@@ -240,7 +274,7 @@ plotter <- function(myGS, myGates) {
     ggcyto_par_set(limits = "instrument") +
     facet_wrap(. ~ `SAMPLE ID`) +
     theme_bw(base_size=28) +
-    theme(#plot.title = element_blank(),
+    theme(
       legend.position = "none",
       strip.text.x = element_text(margin = margin(0,0,0,0, "cm")),
       panel.grid.major = ggplot2::element_blank()) +
@@ -260,3 +294,14 @@ for(b in 1:3) {
           labs(caption = sprintf("Batch %s", b)))
   dev.off()
 }
+
+####################
+
+# Re-plot the iNKT gate for B2
+png(filename = file.path(here::here("out/QC/FACS_Plots"),
+                         sprintf("%s_B2_Updated_%s.png",
+                                 sub(".*\\/([^\\/]+$)", "\\1", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT"),
+                                 format(Sys.time(), "%Y-%m-%d_%H-%M-%S"))),
+    width = 1900, height = 1030)
+print(plotter(subset(gs, Batch == 2), "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT"))
+dev.off()
