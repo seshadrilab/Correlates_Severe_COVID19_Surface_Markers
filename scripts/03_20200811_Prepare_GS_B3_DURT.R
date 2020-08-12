@@ -9,9 +9,9 @@ library(readxl)
 
 # Read in Batch 3 workspace and prepare GatingSet. (Second version of workspace)
 
-date <- 20200606
+date <- 20200811
 
-xml_path_b3 <- here::here("data/20200604 HAARVI DURT B3/20200605 HAARVI DURT B3_KY.xml")
+xml_path_b3 <- here::here("data/20200604 HAARVI DURT B3/20200605 HAARVI DURT B3_KY2.xml")
 fcs_subfolder_b3 <- here::here("data/20200604 HAARVI DURT B3")
 
 ws_b3 <- open_flowjo_xml(xml_path_b3)
@@ -33,18 +33,20 @@ pData(gs_b3)$filename <- sapply(rownames(pData(gs_b3)), function(x) {
 pData(gs_b3)$rowname <- rownames(pData(gs_b3))
 pData(gs_b3)
 
-# Note that 25 is mislabeled 25c in the actual FCS file keywords slot.
+# Note that 25 is mislabeled 25c in the actual FCS file keywords slot, but it has been fixed in the workspace.
 ff25 <- read.FCS(here::here("data/20200604 HAARVI DURT B3/Samples_H1_H01_063.fcs"))
 description(ff25)$`SAMPLE ID`
 
 # Read in the patient manifest
-manifest <- readxl::read_excel(here::here("data/Seshadri manifest 22May2020.xlsx"), range = "A6:T80") %>% 
-  dplyr::rename("Comments" = `...20`)
+manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_11June2020.csv"), check.names = F, stringsAsFactors = F)
+
 # Add metadata to pData
 pData_tmp <- pData(gs_b3) %>% 
   mutate(`SAMPLE ID` = toupper(`SAMPLE ID`)) %>% 
   left_join(manifest %>%
-              dplyr::select(`Record ID`, `Sample ID`, Cohort, Age, Sex, Race, `Hispanic?`, `Days symptom onset to visit 1`, `Pair ID`, Comments),
+              dplyr::select(`Record ID`, `Sample ID`, "Collection date", "Cell count", 
+                            "Cohort", "Age", "Sex", "Race", "Hispanic?", "Days symptom onset to visit 1", 
+                            "Pair ID", "Race_v2"),
             by = c("SAMPLE ID" = "Record ID")) %>% 
   mutate(Batch = 3)
 rownames(pData_tmp) <- rownames(pData(gs_b3))
@@ -87,19 +89,19 @@ pData(parameters(gh_pop_get_data(gs_b3[[1]])))[,c(1, 2)]
 # $P23 <U395-A>  HLADR
 
 png(here::here(sprintf("out/QC/B3_GatingTree_%s.png", date)), width = 7, height = 5, units = "in", res = 300)
-(plot(gs_b3, fontsize=15, bool=T))
+plot(gs_b3, fontsize=15, bool=T)
 dev.off()
 
-save_gs(gs_b3, here::here("out/GatingSets/20200606_HAARVI_DURT_GatingSet_B3"))
+save_gs(gs_b3, here::here("out/GatingSets/20200811_HAARVI_DURT_GatingSet_B3"))
 
 #####################################################################
 
-# gs_b3 <- load_gs(here::here("out/GatingSets/20200606_HAARVI_DURT_GatingSet_B3"))
+# gs_b3 <- load_gs(here::here("out/GatingSets/20200811_HAARVI_DURT_GatingSet_B3"))
 
 dput(gh_get_pop_paths(gs_b3))
 
 # Perform QC on CD3 counts
-cd3_path <- "/Time/S/Live/3+"
+cd3_path <- "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+"
 cd3_counts_b3 <- pData(gs_b3) %>% 
   left_join(gs_pop_get_count_fast(gs_b3, subpopulations = c(cd3_path)) %>% 
               pivot_wider(id_cols = name, names_from = "Population", values_from = "Count") %>% 
@@ -107,7 +109,7 @@ cd3_counts_b3 <- pData(gs_b3) %>%
             by = c("rowname" = "name")) %>% 
   dplyr::select("SAMPLE ID", "Cohort", "Age", "Sex", "Race", "Days symptom onset to visit 1", "Batch", "CD3")
 
-png(here::here(sprintf("out/QC/B3_CD3_Counts_%s.png", date)),
+png(here::here(sprintf("out/QC/QC_Counts/B3_CD3_Counts_%s.png", date)),
     width = 10, height = 6, units="in", res=300)
 ggplot(cd3_counts_b3 %>% 
          mutate(Color = ifelse(CD3 < 10000, "red", "black")),
@@ -121,6 +123,7 @@ dev.off()
 #####################################################################
 
 # Plot gates using ggcyto
+
 
 plotter <- function(myGS, myGates) {
   firstGate <- myGates[[1]]
@@ -138,24 +141,25 @@ plotter <- function(myGS, myGates) {
     axis_x_inverse_trans() + axis_y_inverse_trans() +
     ggcyto_par_set(limits = "instrument") +
     facet_wrap(. ~ `SAMPLE ID`) +
-    theme_bw(base_size=20) +
-    theme(#plot.title = element_blank(),
-      legend.position = "none",
-      strip.text.x = element_text(size = 14, margin = margin(0,0,0,0, "cm")),
-      panel.grid.major = ggplot2::element_blank()) +
     theme_bw(base_size=28) +
-    geom_stats(size=8, alpha=0.4) +
-    labs(title=myGates[[1]], caption = "Batch 3")
+    theme(
+      legend.position = "none",
+      strip.text.x = element_text(margin = margin(0,0,0,0, "cm")),
+      panel.grid.major = ggplot2::element_blank()) +
+    labs(title=myGates[[1]]) +
+    geom_stats(size=8, alpha=0.4)
 }
 
-gates2draw <- list("/Time", "/Time/S", "/Time/S/Live", "/Time/S/Live/3+",
-                   c("/Time/S/Live/3+/4+", "/Time/S/Live/3+/8+"), 
-                   c("/Time/S/Live/3+/CD38+", "/Time/S/Live/3+/HLADR+"), 
-                   "/Time/S/Live/3+/GD-",
+gates2draw <- list("/Time", "/Time/S", "/Time/S/Live", 
                    c("/Time/S/Live/14+", "/Time/S/Live/19+"),
-                   "/Time/S/Live/56+",
-                   "/Time/S/Live/iNKT", 
-                   "/Time/S/Live/MAIT")
+                   "/Time/S/Live/CD14-CD19-", 
+                   "/Time/S/Live/CD14-CD19-/LD", "/Time/S/Live/CD14-CD19-/LD/Singlet", 
+                   "/Time/S/Live/CD14-CD19-/LD/Singlet/56+", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+", 
+                   c("/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/4+", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/8+"), 
+                   c("/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/CD38+", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/HLADR+"),
+                   "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/GD-", 
+                   "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/iNKT", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/MAIT")
+
 
 for(currentGates in gates2draw) {
   png(filename = file.path(here::here("out/QC/FACS_Plots"),
@@ -193,20 +197,18 @@ plotter_hist <- function(myGS, myGates, yAxis="GD") {
     axis_x_inverse_trans() + axis_y_inverse_trans() +
     ggcyto_par_set(limits = "instrument") +
     facet_wrap(. ~ `SAMPLE ID`) +
-    theme_grey(base_size = 20) +
-    theme(#plot.title = element_blank(),
-      legend.position = "none",
-      strip.text.x = element_text(size = 14, margin = margin(0,0,0,0, "cm")),
-      panel.grid.major = ggplot2::element_blank()) +
     theme_bw(base_size=28) +
-    geom_stats(size=8, alpha=0.4) +
-    labs(title=myGates[[1]], caption = "Batch 3")
+    theme(
+      legend.position = "none",
+      strip.text.x = element_text(margin = margin(0,0,0,0, "cm"))) +
+    labs(title=myGates[[1]]) +
+    geom_stats(size=8, alpha=0.4)
 }
 
-cd4_mem_gates <- c("/Time/S/Live/3+/4+/CCR7+", "/Time/S/Live/3+/4+/CD45RA+")
-cd8_mem_gates <- c("/Time/S/Live/3+/8+/CCR7+", "/Time/S/Live/3+/8+/CD45RA+")
+cd4_mem_gates <- c("/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/4+/CCR7+", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/4+/CD45RA+")
+cd8_mem_gates <- c("/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/8+/CCR7+", "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/8+/CD45RA+")
 
-for(currentGates in list(cd4_mem_gates, cd8_mem_gates, "/Time/S/Live/3+/GD+/Vd2+")) {
+for(currentGates in list(cd4_mem_gates, cd8_mem_gates, "/Time/S/Live/CD14-CD19-/LD/Singlet/CD3+/GD+/Vd2+")) {
   png(filename = file.path(here::here("out/QC/FACS_Plots"),
                            sprintf("%s_B3_%s.png",
                                    sub(".*\\/([^\\/]+$)", "\\1", currentGates[[1]]),
