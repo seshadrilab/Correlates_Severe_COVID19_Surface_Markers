@@ -39,3 +39,8 @@ rsconnect/
 *.Rproj
 data*
 out/GatingSets/*
+out/QC/old
+out/old
+out/QC/FACS_Plots/old
+scripts/2020062*
+scripts/20200607_Combine*
