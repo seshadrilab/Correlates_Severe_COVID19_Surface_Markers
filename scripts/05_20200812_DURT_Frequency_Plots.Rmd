@@ -119,10 +119,10 @@ head(pop_dat)
 length(unique(pop_dat$`SAMPLE ID`)) == nrow(pop_dat)
 table(pop_dat$Batch) # 20, 18, 17
 
-if(save_output) {
-  write.csv(pop_dat, here::here("out/Cell_Subpopulation_Stats/20200812_HAARVI_DURT_Cell_Subpopulation_Counts.csv"), row.names = F)
-  # pop_dat <- read.csv(here::here("out/Cell_Subpopulation_Stats/20200812_HAARVI_DURT_Cell_Subpopulation_Counts.csv"), check.names = F, stringsAsFactors = F)
-}
+# if(save_output) {
+#   write.csv(pop_dat, here::here("out/Cell_Subpopulation_Stats/20200812_HAARVI_DURT_Cell_Subpopulation_Counts.csv"), row.names = F)
+#   # pop_dat <- read.csv(here::here("out/Cell_Subpopulation_Stats/20200812_HAARVI_DURT_Cell_Subpopulation_Counts.csv"), check.names = F, stringsAsFactors = F)
+# }
 ```
   
 # Perform statistical tests vs status  
@@ -206,6 +206,24 @@ p_adj_df <- as.data.frame(multiple_comparisons_group_assignment) %>%
 p_adj_df %>% 
   arrange(p.adj) %>% 
   head()
+```
+  
+```{r}
+if(save_output) {
+  # Save frequencies (but as percents) and ratios to a file, for integrated analysis with ICS and Ab data
+  # These columns can be read in separately:, "Cohort", "Age", "Sex", "Race_v2", "Hispanic?", "Days_Symptom_Onset_to_Visit_1"
+  pop_dat_sub_2save <- pop_dat_sub %>% 
+    dplyr::select("SAMPLE ID", all_of(cols_to_test)) %>% 
+    mutate_at(vars(grep("_div_", cols_to_test, value=T)), ~ . * 100) %>% 
+    rename_at(vars(grep("_div_", cols_to_test, value=T)), ~ sub("_div_", "_pct_", .)) %>% 
+    rename("SAMPLE_ID" = "SAMPLE ID") %>% 
+    # Convert the numeric columns to character type after rounding to 20 digits. This will help ensure consistency when writing and reading the data to a file
+    mutate_at(vars(-"SAMPLE_ID"), ~ format(., digits = 20))
+  write.csv(pop_dat_sub_2save, here::here("processed_data/20200812_HAARVI_DURT_Cell_Population_Percents.csv"), row.names = F)
+  # pop_dat_sub_2save <- read.csv(here::here("processed_data/20200812_HAARVI_DURT_Cell_Population_Percents.csv"), stringsAsFactors = F)
+  # all.equal(pop_dat_sub_2save %>% mutate_at(vars(-"SAMPLE_ID"), as.numeric),
+  #  read.csv(here::here("processed_data/20200812_HAARVI_DURT_Cell_Population_Percents.csv"), stringsAsFactors = F))
+}
 ```
   
 # Plot results  
