@@ -156,7 +156,8 @@ pop_dat <- pop_dat %>%
          HLADR_CD38_div_MAIT = MAIT_HLADR_Pos_CD38_Pos / MAIT,
          iNKT_div_T = iNKT / T_cells,
          HLADR_CD38_div_iNKT = iNKT_HLADR_Pos_CD38_Pos / iNKT,
-         CD4_CD8_ratio = CD4 / CD8)
+         CD4_CD8_ratio = CD4 / CD8,
+         Vd2_div_GD = GD_Pos_Vd2_Pos / GD_Pos)
 cols_to_test <- c("T_div_Live", "B_div_Live", "Monocytes_div_Live", 
                   "NK_div_Live", "Monocytes_Lymphocytes_ratio", "CD4_div_T", "CD8_div_T", "HLADR_CD38_div_CD4", 
                   "Naive_div_CD4", "TCM_div_CD4", "TEMRA_div_CD4", "TEM_div_CD4", 
@@ -164,7 +165,7 @@ cols_to_test <- c("T_div_Live", "B_div_Live", "Monocytes_div_Live",
                   "TEM_div_CD8", "GD_div_T", "GD_Vd2Pos_div_T", "GD_Vd2Neg_div_T", 
                   "HLADR_CD38_div_GD", "HLADR_CD38_div_GD_Vd2Pos", "HLADR_CD38_div_GD_Vd2Neg", 
                   "MAIT_div_T", "HLADR_CD38_div_MAIT", "iNKT_div_T", "HLADR_CD38_div_iNKT",
-                  "CD4_CD8_ratio")
+                  "CD4_CD8_ratio", "Vd2_div_GD")
 pop_dat_sub <- pop_dat %>% 
   dplyr::filter(Cohort %in% c("Non-hospitalized", "Hospitalized")) %>% 
   rename(Days_Symptom_Onset_to_Visit_1 = `Days symptom onset to visit 1`) %>% 
@@ -195,7 +196,8 @@ multiple_comparisons_group_assignment <- c("T_div_Live" = 1, "B_div_Live" = 1, "
                                            "HLADR_CD38_div_GD" = 7, "HLADR_CD38_div_GD_Vd2Pos" = 7, "HLADR_CD38_div_GD_Vd2Neg" = 7, 
                                            "MAIT_div_T" = 8, "HLADR_CD38_div_MAIT" = 8,
                                            "iNKT_div_T" = 9, "HLADR_CD38_div_iNKT" = 9,
-                                           "CD4_CD8_ratio" = 10)
+                                           "CD4_CD8_ratio" = 10,
+                                           "Vd2_div_GD" = 11)
 p_adj_df <- as.data.frame(multiple_comparisons_group_assignment) %>% 
   rownames_to_column(var="comparisonCol") %>% 
   mutate(p.unadj = sapply(mannwhitney_results, function(mwr) {mwr$p.unadj})) %>% 
