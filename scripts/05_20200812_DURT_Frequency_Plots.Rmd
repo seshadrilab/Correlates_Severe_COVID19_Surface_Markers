@@ -63,6 +63,8 @@ library(ggcyto) # devtools::install_github("RGLab/ggcyto", ref="ggplot3.3") for 
 library(here)
 library(tidyverse)
 library(ggpubr)
+library(grid)
+library(gridExtra)
 ```
    
 # Read in GatingSet  
@@ -170,7 +172,7 @@ pop_dat_sub <- pop_dat %>%
   dplyr::filter(Cohort %in% c("Non-hospitalized", "Hospitalized")) %>% 
   rename(Days_Symptom_Onset_to_Visit_1 = `Days symptom onset to visit 1`) %>% 
   mutate(Days_Symptom_Onset_to_Visit_1 = as.numeric(Days_Symptom_Onset_to_Visit_1),
-         Cohort = factor(Cohort, levels = c("Non-hospitalized", "Hospitalized")))
+         Cohort = factor(Cohort, levels = c("Hospitalized", "Non-hospitalized")))
 mannwhitney_results <- lapply(cols_to_test, function(col) {
   mw <- wilcox.test(as.formula(sprintf("%s ~ Cohort", col)),
                     data = pop_dat_sub)
@@ -230,7 +232,7 @@ if(save_output) {
   
 # Plot results  
   
-```{r, fig.width=7, fig.height=5}
+```{r}
 # Arial font setup. Downloaded afms from https://github.com/microsoft/microsoft-r-open/tree/ec3fd89e5fb5794bd8149905c134ad801bb61800
 Arial <- Type1Font(family = "Arial",
                    metrics = c(here::here("data/Arial_afm/ArialMT.afm"),
@@ -239,13 +241,11 @@ Arial <- Type1Font(family = "Arial",
                                here::here("data/Arial_afm/ArialMT-BoldItalic.afm")))
 pdfFonts(Arial = Arial)
 
+CohortColors <- c("Hospitalized" = "#707ed4", "Non-hospitalized" = "#c1ddd7")
 plot_result <- function(col) {
   current_p_unadj <- mannwhitney_results[[col]]$p.unadj
   current_p_adj <- p_adj_df %>% dplyr::filter(comparisonCol == col) %>% dplyr::pull(p.adj)
-  current_multiple_comparisons_group_size <- p_adj_df %>% dplyr::filter(comparisonCol == col) %>% dplyr::pull(multiple_comparisons_group_size)
-  annotation_df <- data.frame(pop=col, group1="Non-hospitalized", group2 = "Hospitalized", start=1, end = 2,
-                              y_pos = 1.08*max(pop_dat_sub[,col]),
-                              p.adj.text = if_else(current_p_adj < 0.001, "p<.001", paste0("p=", sub("0.", ".", round(current_p_adj, 3)))))
+  p.adj.text <- if_else(current_p_adj < 0.001, "p<.001", paste0("p=", sub("0.", ".", round(current_p_adj, 3))))
   pop1 <- sub("(.*)_div_.*", "\\1", col)
   pop2 <- sub(".*_div_(.*)", "\\1", col)
   current_ylab <- if(col == "Monocytes_Lymphocytes_ratio")
@@ -253,61 +253,58 @@ plot_result <- function(col) {
   else if(col == "CD4_CD8_ratio")
     {"CD4:CD8"}
   else 
-    {sprintf("%% %s of\n%s cells", pop1, pop2)}
+    {sprintf("%% %s\nof %s cells", sub("_", " ", pop1), sub("_", " ", pop2))}
   plot <- ggplot(pop_dat_sub, aes(Cohort, !!as.name(col))) +
     theme_bw(base_size = 22) +
-    geom_jitter(width=0.25, height=0, pch=21, fill="grey", alpha=0.8) +
-    geom_errorbarh(data = pop_dat_sub %>% group_by(Cohort) %>% summarise(med = median(!!as.name(col))),
-                   aes(y = med,
-                       xmax = 1.5 + 0.45,
-                       xmin = 1.5 - 0.45,
-                       height = 0),
-                   position=position_dodge(width=0),
-                   color = "black",
-                   size=1) + # size is thickness of the lines
-    labs(y = current_ylab,
-         caption=sprintf("Mann-Whitney U test\nBonferroni corrected, n=%s\np-unadj%s",
-                         current_multiple_comparisons_group_size,
-                         if_else(current_p_unadj < 0.001, "<.001", paste0("=", sub("0.", ".", round(current_p_unadj, 3)))))) +
-    suppressWarnings(ggsignif::geom_signif(inherit.aes=F,data=annotation_df,
-                          aes(xmin=start+0.15, xmax=end-0.15,
-                              annotations=`p.adj.text`,
-                              y_position=y_pos), # , family="Arial"
-                          tip_length = c(0.02, 0.02),
-                          textsize=7,
-                          manual = TRUE)) +
+    geom_violin(aes(fill = Cohort), draw_quantiles = c(0.5),
+              # All violins have the same maximum width. Overrides default of equal area
+              scale="width") +
+    geom_violin(fill="transparent", draw_quantiles = c(0.25, 0.75), linetype = "dashed",
+                scale="width") +
     theme(axis.title.x = element_blank(),
-          axis.title.y = element_text(size=22),
-          axis.text.y = element_text(color="black", size=22),
-          axis.text.x = element_text(color="black", size=22),
-          plot.title = element_blank(),
-          plot.caption = element_text(size=10),
-          panel.grid.minor = element_blank(),
-          legend.position = "none",
-          plot.margin = margin(1.3, 0.2, 0, 0.2, "cm")) +
-    scale_x_discrete(labels=c("Non-hospitalized" = "Conv\nNon-Hosp", "Hospitalized" = "Conv\nHosp"),
-                     expand = c(0.2,0.2))
-    if(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio")) {
-      plot <- plot + scale_y_continuous(limits=c(0, 1.3*max(pop_dat_sub[,col])))
-    } else {
-      plot <- plot + scale_y_continuous(labels = function(x) paste0(x*100), limits=c(0, 1.3*max(pop_dat_sub[,col])))
-    }
+            axis.title.y = element_text(size=22),
+            axis.text.y = element_text(color="black", size=21),
+            axis.text.x = element_text(color="black", size=21),
+            plot.title = element_text(hjust = 0.5, size=22),
+            panel.grid = element_blank(),
+            legend.position = "none",
+            plot.margin = margin(0.3, 0.2, 0.1, 0.2, "cm")) +
+    scale_x_discrete(labels=c("Non-hospitalized" = "NH", "Hospitalized" = "H"), expand = c(0.3, 0.3)) +
+    labs(y = current_ylab) +
+    scale_fill_manual(values = CohortColors)
+  plot_ylims <- ggplot_build(plot)$layout$panel_params[[1]]$y.range
+  plot <- plot + 
+    annotate("text", x = 1.5, y = plot_ylims[1] + 0.9*diff(plot_ylims), label = p.adj.text, size=7)
+  if(!(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio"))) {
+    plot <- plot + scale_y_continuous(labels = function(x) paste0(x*100))
+  }
   plot
 }
+
+freqs_vs_cohort_plots <- lapply(cols_to_test, plot_result)
+names(freqs_vs_cohort_plots) <- cols_to_test
+
+# Make the width of all plots the same
+# Help from here https://stackoverflow.com/a/41242871
+gl <- lapply(freqs_vs_cohort_plots, ggplotGrob)  
+wd <- do.call(unit.pmax, lapply(gl, "[[", 'widths')) # Grab the width of the plot which has the largest width
+freqs_vs_cohort_plots <- lapply(gl, function(x) {
+  x[['widths']] = wd
+  x})
 
 if(save_output) {
   for(col in cols_to_test) {
     pdf(file=here::here(sprintf("out/Cell_Subpopulation_Stats/Plots/20200812_%s_vs_Cohort.pdf", col)),
         width=4, height=4, onefile = TRUE, bg = "transparent", family = "Arial", fonts = "Arial") # default unit is inches, default font is Helvetica.
-    print(plot_result(col))
+    print(freqs_vs_cohort_plots[[col]])
     dev.off()
 }
 }
 ```
 
-```{r, fig.width=4, fig.height=4}
+```{r, fig.width=5, fig.height=4}
 for(col in cols_to_test) {
-  print(plot_result(col))
+  grid.arrange(freqs_vs_cohort_plots[[col]])
 }
 ```
 
@@ -320,23 +317,51 @@ Regress the following quantities vs Days-from-Symptom-Onset:
 
 ## Draw scatter plots
 
-Grouped by Hospitalization status
+Colored by Hospitalization status
 
-```{r, fig.width=4, fig.height=4}
-freqs_to_regress_vs_days <- c("T_div_Live", "CD4_div_T", "CD8_div_T", "CD4_CD8_ratio",
-                "Monocytes_Lymphocytes_ratio", "HLADR_CD38_div_CD4", "HLADR_CD38_div_CD8")
-for(freq in freqs_to_regress_vs_days) {
-  p <- ggscatter(pop_dat_sub,
-            x = "Days_Symptom_Onset_to_Visit_1", y = freq,
-            color = "Cohort",
-            add = "reg.line",
-            ggtheme = ggplot2::theme_bw(base_size = 17),
-            legend = "bottom") +
-    stat_cor(aes(color = Cohort), label.x = 20)
-  print(p)
+```{r, fig.width=5, fig.height=4}
+plot_freq_vs_days <- function(col) {
+  pop1 <- sub("(.*)_div_.*", "\\1", col)
+  pop2 <- sub(".*_div_(.*)", "\\1", col)
+  current_ylab <- if(col == "Monocytes_Lymphocytes_ratio")
+    {"Monocytes:Lymphocytes"}
+  else if(col == "CD4_CD8_ratio")
+    {"CD4:CD8"}
+  else 
+    {sprintf("%% %s\nof %s cells", sub("_", " ", pop1), pop2)}
+  current_plot <- ggplot(pop_dat_sub, aes(Days_Symptom_Onset_to_Visit_1, !!as.symbol(col))) +
+    theme_bw(base_size = 22) +
+    geom_point(aes(fill=Cohort), pch=21, size=3) +
+    theme(axis.title.x = element_text(size=20),
+          axis.title.y = element_text(size=20),
+          axis.text.y = element_text(color="black", size=17),
+          axis.text.x = element_text(color="black", size=17),
+          plot.title = element_blank(),
+          panel.grid = element_blank(),
+          legend.position = "none",
+          plot.margin = margin(0.3, 0.4, 0.1, 0.2, "cm")) +
+    labs(x = "Days since symptom onset",
+         y = current_ylab) +
+    scale_fill_manual(values = CohortColors)
+  if(!(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio"))) {
+    current_plot <- current_plot + scale_y_continuous(labels = function(x) paste0(x*100))
+  }
+  current_plot
 }
 
-# Verify that the p values shown above are unadjusted p-values which corresponds to the linear regression coefficient p-value
-summary(lm(CD4_CD8_ratio ~ Days_Symptom_Onset_to_Visit_1, data = pop_dat_sub %>% dplyr::filter(Cohort == "Hospitalized")))
-# Yes
+freqs_to_plot_vs_days <- c("T_div_Live", "CD4_div_T", "CD8_div_T", "CD4_CD8_ratio",
+                "Monocytes_Lymphocytes_ratio", "HLADR_CD38_div_CD4", "HLADR_CD38_div_CD8")
+freqs_vs_days_plots <- lapply(freqs_to_plot_vs_days, plot_freq_vs_days)
+names(freqs_vs_days_plots) <- freqs_to_plot_vs_days
+
+# Make the width of all plots the same
+# Help from here https://stackoverflow.com/a/41242871
+gl <- lapply(freqs_vs_days_plots, ggplotGrob)  
+wd <- do.call(unit.pmax, lapply(gl, "[[", 'widths')) # Grab the width of the plot which has the largest width
+freqs_vs_days_plots <- lapply(gl, function(x) {
+  x[['widths']] = wd
+  x})
+for(freq in freqs_to_plot_vs_days) {
+  grid.arrange(freqs_vs_days_plots[[freq]])
+}
 ```
