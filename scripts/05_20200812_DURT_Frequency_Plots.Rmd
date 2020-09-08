@@ -65,6 +65,7 @@ library(tidyverse)
 library(ggpubr)
 library(grid)
 library(gridExtra)
+library(ggbeeswarm)
 ```
    
 # Read in GatingSet  
@@ -241,26 +242,37 @@ Arial <- Type1Font(family = "Arial",
                                here::here("data/Arial_afm/ArialMT-BoldItalic.afm")))
 pdfFonts(Arial = Arial)
 
-CohortColors <- c("Hospitalized" = "#707ed4", "Non-hospitalized" = "#c1ddd7")
+# CohortColors <- c("Hospitalized" = "#707ed4", "Non-hospitalized" = "#c1ddd7")
+# CohortOutlineColors <- c("Hospitalized" = "#5768d4", "Non-hospitalized" = "#95dbcc")
+CohortColors <- c("Hospitalized" = "#757bbcb2", "Non-hospitalized" = "#b0d2c8bf")
+CohortOutlineColors <- c("Hospitalized" = "#757bbbff", "Non-hospitalized" = "#b0d1c8ff")
+
 plot_result <- function(col) {
   current_p_unadj <- mannwhitney_results[[col]]$p.unadj
   current_p_adj <- p_adj_df %>% dplyr::filter(comparisonCol == col) %>% dplyr::pull(p.adj)
-  p.adj.text <- if_else(current_p_adj < 0.001, "p<.001", paste0("p=", sub("0.", ".", round(current_p_adj, 3))))
+  p.adj.text <- if(current_p_adj < 0.001) { "p<.001"} else if(current_p_adj == 1) {"p=1.0"} else { paste0("p=", sub("0.", ".", round(current_p_adj, 3))) }
   pop1 <- sub("(.*)_div_.*", "\\1", col)
   pop2 <- sub(".*_div_(.*)", "\\1", col)
-  current_ylab <- if(col == "Monocytes_Lymphocytes_ratio")
-    {"Monocytes:Lymphocytes"}
-  else if(col == "CD4_CD8_ratio")
-    {"CD4:CD8"}
-  else 
-    {sprintf("%% %s\nof %s cells", sub("_", " ", pop1), sub("_", " ", pop2))}
+  current_ylab <- if(col == "Monocytes_Lymphocytes_ratio") {
+    "Monocytes:Lymphocytes"
+  } else if(col == "CD4_CD8_ratio") {
+      "CD4:CD8"
+  } else {
+      sprintf("%% %s\nof %s cells", sub("_", " ", pop1), sub("_", " ", pop2))
+  }
   plot <- ggplot(pop_dat_sub, aes(Cohort, !!as.name(col))) +
     theme_bw(base_size = 22) +
-    geom_violin(aes(fill = Cohort), draw_quantiles = c(0.5),
+    # Cannot figure out straightforward way to get outline color different from quantile line colors
+    geom_violin(aes(fill = Cohort), draw_quantiles = c(0.5), color = "black",
               # All violins have the same maximum width. Overrides default of equal area
-              scale="width") +
-    geom_violin(fill="transparent", draw_quantiles = c(0.25, 0.75), linetype = "dashed",
-                scale="width") +
+              scale="width", width=0.6) +
+    geom_violin(fill="transparent", color="black", draw_quantiles = c(0.25, 0.75), linetype = "dashed",
+                scale="width", width=0.6) +
+    geom_violin(aes(color=Cohort), fill="transparent",
+              scale="width", width=0.6, size=1.5) +
+    # geom_beeswarm may result in points being plotted out of the violin bounds for certain very dense plots (e.g. TEMRA_div_CD4), so use geom_quasirandom instead
+    # geom_beeswarm(size=0.5, cex=3.5, priority = "random") +
+    geom_quasirandom(size=0.5, width=0.3, varwidth=T, method="quasirandom") +
     theme(axis.title.x = element_blank(),
             axis.title.y = element_text(size=22),
             axis.text.y = element_text(color="black", size=21),
@@ -271,12 +283,16 @@ plot_result <- function(col) {
             plot.margin = margin(0.3, 0.2, 0.1, 0.2, "cm")) +
     scale_x_discrete(labels=c("Non-hospitalized" = "NH", "Hospitalized" = "H"), expand = c(0.3, 0.3)) +
     labs(y = current_ylab) +
-    scale_fill_manual(values = CohortColors)
+    scale_fill_manual(values = CohortColors) +
+    scale_color_manual(values = CohortOutlineColors)
   plot_ylims <- ggplot_build(plot)$layout$panel_params[[1]]$y.range
+  plot_ylims[2] <- plot_ylims[2] + 0.08*diff(plot_ylims)
   plot <- plot + 
-    annotate("text", x = 1.5, y = plot_ylims[1] + 0.9*diff(plot_ylims), label = p.adj.text, size=7)
-  if(!(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio"))) {
-    plot <- plot + scale_y_continuous(labels = function(x) paste0(x*100))
+    annotate("text", x = 1.5, y = plot_ylims[1] + 0.97*diff(plot_ylims), label = p.adj.text, size=7)
+  if(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio")) {
+    plot <- plot + scale_y_continuous(limits = plot_ylims)
+  } else {
+    plot <- plot + scale_y_continuous(labels = function(x) paste0(x*100), limits = plot_ylims)
   }
   plot
 }
@@ -302,7 +318,7 @@ if(save_output) {
 }
 ```
 
-```{r, fig.width=5, fig.height=4}
+```{r, fig.width=3, fig.height=3.5}
 for(col in cols_to_test) {
   grid.arrange(freqs_vs_cohort_plots[[col]])
 }
@@ -342,7 +358,11 @@ plot_freq_vs_days <- function(col) {
           plot.margin = margin(0.3, 0.4, 0.1, 0.2, "cm")) +
     labs(x = "Days since symptom onset",
          y = current_ylab) +
-    scale_fill_manual(values = CohortColors)
+    # Linear regression line with 95% CI (based on "standard error of predicted means")
+    scale_fill_manual(values = CohortColors) +
+    geom_smooth(color = "black", method="lm")  +
+    # stat_cor from ggpubr
+    stat_cor(method = "pearson", size=6)
   if(!(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio"))) {
     current_plot <- current_plot + scale_y_continuous(labels = function(x) paste0(x*100))
   }
@@ -350,7 +370,7 @@ plot_freq_vs_days <- function(col) {
 }
 
 freqs_to_plot_vs_days <- c("T_div_Live", "CD4_div_T", "CD8_div_T", "CD4_CD8_ratio",
-                "Monocytes_Lymphocytes_ratio", "HLADR_CD38_div_CD4", "HLADR_CD38_div_CD8")
+                "Monocytes_Lymphocytes_ratio", "HLADR_CD38_div_CD4", "HLADR_CD38_div_CD8", "HLADR_CD38_div_GD")
 freqs_vs_days_plots <- lapply(freqs_to_plot_vs_days, plot_freq_vs_days)
 names(freqs_vs_days_plots) <- freqs_to_plot_vs_days
 
