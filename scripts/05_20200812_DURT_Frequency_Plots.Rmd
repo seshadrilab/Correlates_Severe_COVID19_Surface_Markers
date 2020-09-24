@@ -254,7 +254,7 @@ text_sub_list <- list("GD" = "\u03B3\u03B4", "Vd2" = "V\u03B42", "HLADR" = "HLA-
 plot_result <- function(col) {
   current_p_unadj <- mannwhitney_results[[col]]$p.unadj
   current_p_adj <- p_adj_df %>% dplyr::filter(comparisonCol == col) %>% dplyr::pull(p.adj)
-  p.adj.text <- if(current_p_adj < 0.001) { "p<.001"} else if(current_p_adj == 1) {"p=1.0"} else { paste0("p=", sub("0.", ".", round(current_p_adj, 3))) }
+  p.adj.text <- if(current_p_adj < 0.001) { "p<.001"} else if(current_p_adj == 1) {"p=1.0"} else { paste0("p=", round(current_p_adj, 3)) }
   pop1 <- gsubfn(paste(names(text_sub_list),collapse="|"), text_sub_list, sub("(.*)_div_.*", "\\1", col))
   pop2 <- gsubfn(paste(names(text_sub_list),collapse="|"), text_sub_list, sub(".*_div_(.*)", "\\1", col))
   current_ylab <- if(col == "Monocytes_Lymphocytes_ratio") {
@@ -331,9 +331,10 @@ Regress the following quantities vs Days-from-Symptom-Onset:
 Colored by Hospitalization status
 
 ```{r, fig.width=5, fig.height=4}
-plot_freq_vs_days <- function(col) {
-  pop1 <- gsubfn(".", text_sub_list, sub("(.*)_div_.*", "\\1", col))
-  pop2 <- gsubfn(".", text_sub_list, sub(".*_div_(.*)", "\\1", col))
+plot_freq_vs_days <- function(col, include_stats_text=TRUE) {
+  pop1 <- gsubfn(paste(names(text_sub_list),collapse="|"), text_sub_list, sub("(.*)_div_.*", "\\1", col))
+  pop2 <- gsubfn(paste(names(text_sub_list),collapse="|"), text_sub_list, sub(".*_div_(.*)", "\\1", col))
+  
   current_ylab <- if(col == "Monocytes_Lymphocytes_ratio")
     {"Monocytes:Lymphocytes"}
   else if(col == "CD4_CD8_ratio")
@@ -355,9 +356,12 @@ plot_freq_vs_days <- function(col) {
          y = current_ylab) +
     # Linear regression line with 95% CI (based on "standard error of predicted means")
     scale_fill_manual(values = CohortColors) +
-    geom_smooth(color = "black", method="lm")  +
-    # stat_cor from ggpubr
-    stat_cor(method = "pearson", size=7)
+    geom_smooth(color = "black", method="lm")
+  if(include_stats_text) {
+    current_plot <- current_plot +
+      # stat_cor from ggpubr
+      stat_cor(method = "pearson", size=7)
+  }
   if(!(col %in% c("Monocytes_Lymphocytes_ratio", "CD4_CD8_ratio"))) {
     current_plot <- current_plot + scale_y_continuous(labels = function(x) paste0(x*100))
   }
@@ -379,6 +383,9 @@ freqs_vs_days_plots_grid <- lapply(gl, function(x) {
 for(freq in freqs_to_plot_vs_days) {
   grid.arrange(freqs_vs_days_plots_grid[[freq]])
 }
+
+freqs_vs_days_plots_no_stats_text <- lapply(freqs_to_plot_vs_days, plot_freq_vs_days, include_stats_text=FALSE)
+names(freqs_vs_days_plots_no_stats_text) <- freqs_to_plot_vs_days
 ```
 
 ```{r}
@@ -417,26 +424,31 @@ if(save_output) {
   cairo_pdf(file=here::here("out/Plots/Fig1DEFGHIJK_Surface_Marker_Freq_vs_Cohort_and_Days.pdf"),
             width=30, height=8, onefile = TRUE, bg = "transparent", family = "Arial")
   # 1st row
-  freqs_vs_cohort_plots$T_div_Live + freqs_vs_days_plots$T_div_Live +
-    freqs_vs_cohort_plots$CD4_div_T + freqs_vs_days_plots$CD4_div_T +
-    freqs_vs_cohort_plots$CD8_div_T + freqs_vs_days_plots$CD8_div_T +
+  freqs_vs_cohort_plots$T_div_Live + freqs_vs_days_plots_no_stats_text$T_div_Live +
+    freqs_vs_cohort_plots$CD4_div_T + freqs_vs_days_plots_no_stats_text$CD4_div_T +
+    freqs_vs_cohort_plots$CD8_div_T + freqs_vs_days_plots_no_stats_text$CD8_div_T +
       freqs_vs_cohort_plots$GD_div_T + freqs_vs_cohort_plots$Vd2_div_GD +
     # 2nd row
-    freqs_vs_cohort_plots$HLADR_CD38_div_CD4 + freqs_vs_days_plots$HLADR_CD38_div_CD4 +
-    freqs_vs_cohort_plots$HLADR_CD38_div_CD8 + freqs_vs_days_plots$HLADR_CD38_div_CD8 +
+    freqs_vs_cohort_plots$HLADR_CD38_div_CD4 + freqs_vs_days_plots_no_stats_text$HLADR_CD38_div_CD4 +
+    freqs_vs_cohort_plots$HLADR_CD38_div_CD8 + freqs_vs_days_plots_no_stats_text$HLADR_CD38_div_CD8 +
     freqs_vs_cohort_plots$Naive_div_CD4 + freqs_vs_cohort_plots$Naive_div_CD8 +
     plot_spacer() +
       freqs_vs_cohort_plots$HLADR_CD38_div_GD + freqs_vs_cohort_plots$HLADR_CD38_div_GD_Vd2Pos +
       plot_layout(design = design)
   dev.off()
   
-  cairo_pdf(file=here::here("out/Plots/FigS3AB_Surface_Marker_Freq_vs_Cohort.pdf"),
-            width=12, height=8, onefile = TRUE, bg = "transparent", family = "Arial")
+  cairo_pdf(file=here::here("out/Plots/FigS4AB_Surface_Marker_Freq_vs_Cohort.pdf"),
+            width=12, height=6, onefile = TRUE, bg = "transparent", family = "Arial")
   freqs_vs_cohort_plots$iNKT_div_T + freqs_vs_cohort_plots$HLADR_CD38_div_iNKT +
       freqs_vs_cohort_plots$MAIT_div_T + freqs_vs_cohort_plots$HLADR_CD38_div_MAIT +
     freqs_vs_cohort_plots$B_div_Live + freqs_vs_cohort_plots$Monocytes_div_Live +
     freqs_vs_cohort_plots$NK_div_Live + plot_spacer() +
-      plot_layout(widths = rep(3, times = 4), heights = c(4, 4))
+      plot_layout(widths = rep(3, times = 4), heights = c(3, 3))
+  dev.off()
+  
+  cairo_pdf(file=here::here("out/Plots/FigS4C_Activated_GD_vs_Days.pdf"),
+          width=5, height=4, onefile = TRUE, bg = "transparent", family = "Arial")
+  freqs_vs_days_plots_no_stats_text$HLADR_CD38_div_GD
   dev.off()
 }
 ```
