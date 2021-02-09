@@ -37,9 +37,22 @@ rsconnect/
 .Rproj.user
 
 *.Rproj
-data*
 out/GatingSets/*
 out/QC/old
 out/old
 out/QC/FACS_Plots/old
 scripts/2020062*
+scripts/20201020_Generate_Data_For_ImmPort.R
+processed_data/Completed_ImmPort_Templates/
+scripts/20210208_Create_Surface_Marker_ImmPort_FCS_FileMap.R
+data/old
+data/untracked
+data/20200527 HAARVI DURT B1/*
+data/20200602 HAARVI DURT B2/*
+data/20200604 HAARVI DURT B3/*
+!data/20200527 HAARVI DURT B1/20200527 HAARVI B1 CS2_KY.xml
+!data/20200602 HAARVI DURT B2/20200602 HAARVI_DURT_B2_KY3.xml
+!data/20200604 HAARVI DURT B3/20200605 HAARVI DURT B3_KY2.xml
+
+renv/*
+!renv/activate.R

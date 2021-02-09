@@ -13,6 +13,13 @@ date <- 20200811
 
 xml_path_b3 <- here::here("data/20200604 HAARVI DURT B3/20200605 HAARVI DURT B3_KY2.xml")
 fcs_subfolder_b3 <- here::here("data/20200604 HAARVI DURT B3")
+surface_marker_file_map <- read.table(here::here("data/Surface_Markers_ImmPort_FCS_FileMap.tsv"), sep = "\t", header = T,
+                                      colClasses = c("character", "character", "character", "character", "numeric", "numeric"))
+surface_marker_b3_gs_filemap <- surface_marker_file_map %>% 
+  dplyr::filter(!is.na(flowJo_xml_sampleID) & Batch == 3) %>% 
+  rename(sampleID = flowJo_xml_sampleID) %>% 
+  mutate(file = here::here(Destination_Folder_Path, Original_File_Name)) %>% 
+  dplyr::select(sampleID, file)
 
 ws_b3 <- open_flowjo_xml(xml_path_b3)
 merge(fj_ws_get_sample_groups(ws_b3), fj_ws_get_samples(ws_b3), by = "sampleID")
@@ -22,7 +29,7 @@ keywords2import <- c("TUBE NAME", "EXPERIMENT NAME", "$DATE", "SAMPLE ID")
 
 sampleGroup <- "Samples"
 gs_b3 <- flowjo_to_gatingset(ws_b3, name=sampleGroup, keywords=keywords2import,
-                                  path=fcs_subfolder_b3)
+                                  path=surface_marker_b3_gs_filemap)
 pop_lists <- lapply(gs_b3, gh_get_pop_paths)
 # Check that there is one gating tree for all samples
 unique(pop_lists)
@@ -38,7 +45,7 @@ ff25 <- read.FCS(here::here("data/20200604 HAARVI DURT B3/Samples_H1_H01_063.fcs
 description(ff25)$`SAMPLE ID`
 
 # Read in the patient manifest
-manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_11June2020.csv"), check.names = F, stringsAsFactors = F)
+manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_02Oct2020.csv"), check.names = F, stringsAsFactors = F)
 
 # Add metadata to pData
 pData_tmp <- pData(gs_b3) %>% 

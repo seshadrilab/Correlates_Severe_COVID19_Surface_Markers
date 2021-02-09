@@ -13,6 +13,13 @@ date <- 20200811
 
 xml_path_b1 <- here::here("data/20200527 HAARVI DURT B1/20200527 HAARVI B1 CS2_KY.xml")
 fcs_subfolder_b1 <- here::here("data/20200527 HAARVI DURT B1/")
+surface_marker_file_map <- read.table(here::here("data/Surface_Markers_ImmPort_FCS_FileMap.tsv"), sep = "\t", header = T,
+                                      colClasses = c("character", "character", "character", "character", "numeric", "numeric"))
+surface_marker_b1_gs_filemap <- surface_marker_file_map %>% 
+  dplyr::filter(!is.na(flowJo_xml_sampleID) & Batch == 1) %>% 
+  rename(sampleID = flowJo_xml_sampleID) %>% 
+  mutate(file = here::here(Destination_Folder_Path, Original_File_Name)) %>% 
+  dplyr::select(sampleID, file)
 
 ws_b1 <- open_flowjo_xml(xml_path_b1)
 merge(fj_ws_get_sample_groups(ws_b1), fj_ws_get_samples(ws_b1), by = "sampleID")
@@ -22,7 +29,7 @@ keywords2import <- c("TUBE NAME", "EXPERIMENT NAME", "$DATE", "SAMPLE ID")
 
 sampleGroup <- "Samples"
 gs_b1 <- flowjo_to_gatingset(ws_b1, name=sampleGroup, keywords=keywords2import,
-                                  path=fcs_subfolder_b1)
+                                  path=surface_marker_b1_gs_filemap)
 pData(gs_b1)$filename <- sapply(rownames(pData(gs_b1)), function(x) {
   gsub("/.+/", "", description(gh_pop_get_data(gs_b1[[x]]))$FILENAME)
 }, USE.NAMES = F)
@@ -30,7 +37,7 @@ pData(gs_b1)$rowname <- rownames(pData(gs_b1))
 pData(gs_b1)
 
 # Read in the patient manifest
-manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_11June2020.csv"), check.names = F, stringsAsFactors = F)
+manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_02Oct2020.csv"), check.names = F, stringsAsFactors = F)
 # Add metadata to pData
 pData_tmp <- pData(gs_b1) %>% 
   mutate(`SAMPLE ID` = toupper(`SAMPLE ID`)) %>% 

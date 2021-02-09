@@ -11,8 +11,15 @@ library(readxl)
 
 date <- 20200811
 
-xml_path_b2 <- here::here("data/20200602 HAARVI DURT B2/20200602 HAARVI…URT  B2_KY3.xml")
+xml_path_b2 <- here::here("data/20200602 HAARVI DURT B2/20200602 HAARVI_DURT_B2_KY3.xml")
 fcs_subfolder_b2 <- here::here("data/20200602 HAARVI DURT B2/")
+surface_marker_file_map <- read.table(here::here("data/Surface_Markers_ImmPort_FCS_FileMap.tsv"), sep = "\t", header = T,
+                                      colClasses = c("character", "character", "character", "character", "numeric", "numeric"))
+surface_marker_b2_gs_filemap <- surface_marker_file_map %>% 
+  dplyr::filter(!is.na(flowJo_xml_sampleID) & Batch == 2) %>% 
+  rename(sampleID = flowJo_xml_sampleID) %>% 
+  mutate(file = here::here(Destination_Folder_Path, Original_File_Name)) %>% 
+  dplyr::select(sampleID, file)
 
 ws_b2 <- open_flowjo_xml(xml_path_b2)
 merge(fj_ws_get_sample_groups(ws_b2), fj_ws_get_samples(ws_b2), by = "sampleID")
@@ -22,7 +29,7 @@ keywords2import <- c("TUBE NAME", "EXPERIMENT NAME", "$DATE", "SAMPLE ID")
 
 sampleGroup <- "Samples"
 gs_b2 <- flowjo_to_gatingset(ws_b2, name=sampleGroup, keywords=keywords2import,
-                                  path=fcs_subfolder_b2)
+                                  path=surface_marker_b2_gs_filemap)
 pop_lists <- lapply(gs_b2, gh_get_pop_paths)
 # Check that there is one gating tree for all samples
 unique(pop_lists)
@@ -35,7 +42,7 @@ pData(gs_b2)
 # CLT1 is short for "Chu Lab TRIMA 1"
 
 # Read in the patient manifest
-manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_11June2020.csv"), check.names = F, stringsAsFactors = F)
+manifest <- read.csv(here::here("data/Seshadri_HAARVI_PBMC_manifest_merged_02Oct2020.csv"), check.names = F, stringsAsFactors = F)
 
 # Fix the mislabeled sample 39C to the correct 59C:
 pData(gs_b2)$`SAMPLE ID`[which(pData(gs_b2)$`SAMPLE ID` == "39c")] <- "59C"
